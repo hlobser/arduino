@@ -1,18 +1,20 @@
 // Пины подключения компонентов
 #define pumpPin  2        // Пин, к которому подключено реле насоса
 #define soilSensorPin  A0 // Аналоговый пин, к которому подключен датчик почвы
+#define piezoPin 3   // пин пьезодинамика
 
 // Пороговые значения для полива и остановки полива
 #define moistureThreshold  840      // Пороговое значение для включения полива
 //#define dryThreshold  430           // Пороговое значение для остановки полива
                                            // Датчик инверсный: больше влажность - меньше значение.
 // #define  MIN        595                    // Определяем минимальное показание датчика (в воздухе),
-#define  MAX        417                    // определяем максимальное показание датчика (в воде),
+// #define  MAX        417                    // определяем максимальное показание датчика (в воде),
 unsigned int soilMoisture;
 
 void setup() {
   // Инициализация пина насоса как выходного
   pinMode(pumpPin, OUTPUT);
+  pinMode(piezoPin, OUTPUT);
   
   // Инициализация последовательной связи с монитором порта
   Serial.begin(9600);
@@ -24,9 +26,23 @@ void setup() {
 void startWatering() {
   digitalWrite(pumpPin, LOW);  // Включаем реле насоса
   Serial.println("Полив начат");
+  for (int x = 1000; x <= 2000 ; x += 500){ // пищим что полив начался
+    tone (piezoPin, x, 50);
+     
+  }
+  // tone(piezoPin, 1000, 50);
+  // tone(piezoPin, 1500, 50);
+  // tone(piezoPin, 2000, 50);
   delay(5000);
   digitalWrite(pumpPin, HIGH);  // Выключаем реле насоса
   Serial.println("Полив остановлен");
+  for (int x = 2000; x >= 1000 ; x +=500){ // пищим что полив закончился
+    tone (piezoPin, x, 50);
+  }
+  // tone(piezoPin, 2000, 50);
+  // tone(piezoPin, 1500, 50);
+  // tone(piezoPin, 1000, 50);
+
 }
   
 // Функция для остановки полива
