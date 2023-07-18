@@ -4,9 +4,9 @@
 #include "SPI.h"
 #include "SD.h"
 
-LiquidCrystal_I2C LCD(0x27, 16, 2);    // присваиваем имя дисплею
+LiquidCrystal_I2C LCD(0x27, 16, 2);      // присваиваем имя дисплею
 iarduino_RTC time(RTC_DS1302, 6, 7, 8);  // для модуля DS1302 - RST, CLK, DAT
-                                      //у экрана scl к A5, sda к A4
+                                         //у экрана SCL к A5, SDA к A4
 
 #define pumpPin  2        // Пин, к которому подключено реле насоса
 #define soilSensorPin  A0 // Аналоговый пин, к которому подключен датчик почвы
@@ -19,92 +19,167 @@ iarduino_RTC time(RTC_DS1302, 6, 7, 8);  // для модуля DS1302 - RST, CL
                                            // Датчик инверсный: больше влажность - меньше значение.
 // #define  MIN        595                    // Определяем минимальное показание датчика (в воздухе),
 // #define  MAX        417                    // определяем максимальное показание датчика (в воде),
+
+// подключение sd карты:
+/* 
+MOSI - пин 11
+MISO - пин 12
+CLK - пин 13
+CS - пин 4
+*/
 unsigned int soilMoisture;
+const int sdCardPin = 4;
+String datalog_filename = "datalog.csv";
+bool watering = 0;
+
+bool warning = false;     // флаг ошибки
+
+void soundUp();
+void soundDown();
+void startWatering();
+void stopWatering();
+void printToScreen();
+void writeToSD(bool watering);
+
+byte l_warning[] = {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10, 0x1F}; //левая и правая граница треугольника символа ⚠
+byte r_warning[] = {0x10, 0x08, 0x08, 0x04, 0x02, 0x02, 0x01, 0x1F};
 
 void setup() {
   delay(300);
-  // Инициализация пина насоса как выходного
-  pinMode(pumpPin, OUTPUT);
-  pinMode(piezoPin, OUTPUT);
-  tone(piezoPin, 1000, 100);
-  delay(200);
-  tone(piezoPin, 2000, 100);
-  delay(200);
-  tone(piezoPin, 3000, 100);
+  soundUp();
+  pinMode(pumpPin, OUTPUT);       // насос
+  pinMode(piezoPin, OUTPUT);      // пищалка
+  pinMode(sdCardPin, OUTPUT);     // сд карта
+  digitalWrite(pumpPin, HIGH);
 
   LCD.init();            // инициализация LCD дисплея
-  // LCD.backlight();      // включение подсветки дисплея
+// LCD.backlight();      // включение подсветки дисплея
+
+
+LCD.createChar(0, l_warning);
+LCD.createChar(1, r_warning);
+
+  if (!SD.begin(sdCardPin)) { 
+    warning = true;
+    LCD.clear();                      // Пытаемся проинициализировать sd карту
+    LCD.print("NO SD card");          // Если что-то пошло не так, выдаем на экран
+    return;
+  }
+  else {
   LCD.setCursor(0, 0);
   LCD.print("Humidity:");
   LCD.setCursor(0, 1);
   LCD.print("data and time");
+  }
+  // Serial.println("card initialized.");
 
   time.begin();
-  //time.settime(0, 13, 14, 17, 7, 23, 2);  // 0  сек, 13 мин, 14 часов, 17, июля, 2023, понедельник
-  Serial.begin(9600);
-  digitalWrite(pumpPin, HIGH);
-  delay(40000);
-  tone(piezoPin, 3000, 100);
-  delay(200);
-  tone(piezoPin, 2000, 100);
-  delay(200);
-  tone(piezoPin, 1000, 100);
-  
+  //time.settime(0, 13, 10, 18, 7, 23, 3);  // сек, мин, часы, число, месяц, год, день недели(0 - суббота)
+  // Serial.begin(9600);
+  if (!SD.exists(datalog_filename)) {
+    File dataFile = SD.open(datalog_filename, FILE_WRITE);
+      if (dataFile) {
+      dataFile.println("date,time,humidity,watering");
+      dataFile.close();
+    }
+  }
+  //delay(40000);
+  delay(4000);
+  //soundDown();
 }
-// Функция для включения полива
-  
-void startWatering() {
-  digitalWrite(pumpPin, LOW);  // Включаем реле насоса
-  Serial.println("Полив начат");
-  tone(piezoPin, 1000, 100);
-  delay(200);
-  tone(piezoPin, 2000, 100);
-  delay(200);
-  tone(piezoPin, 3000, 100);
-  
-}
-// Функция для остановки полива
-void stopWatering() {
-  digitalWrite(pumpPin, HIGH);  // Выключаем реле насоса
-  Serial.println("Полив остановлен");
-  tone(piezoPin, 3000, 100);
-  delay(200);
-  tone(piezoPin, 2000, 100);
-  delay(200);
-  tone(piezoPin, 1000, 100);
-}
-void printToScreen(){
-  LCD.setCursor(9, 0);
-  LCD.print(soilMoisture);
-  LCD.setCursor(0, 1);
-  LCD.print(time.gettime("d-m, H:i:s"));
-}
-void writeToSD(){
 
-}
+  
+
 void loop() {
+  if (String(time.gettime("d-m-Y")) == "00-00-2000" or String(time.gettime("H:i:s")) == "45:85:85" ){ // проверка не отвалилоь ли питание у часов
+    warning = true;
+    File dataFile = SD.open(datalog_filename, FILE_WRITE);
+    if (dataFile) {
+      dataFile.println("RTC module error");
+      dataFile.close();
+    }
+  }
+  // if (!(200 <= soilMoisture >= 900)){
+  //   File dataFile = SD.open(datalog_filename, FILE_WRITE);
+  //   if (dataFile) {
+  //     dataFile.println("soil moisture sensor error");
+  //     dataFile.close();  
+  //   }   
+  // }
+  if (warning) {
+    LCD.setCursor(13, 0);
+    LCD.write(0);
+    LCD.print("!");
+    LCD.write(1);
+  }
   // Считываем значение с датчика почвы
   soilMoisture = analogRead(soilSensorPin);
 
   // Выводим значение в монитор порта
-  Serial.print("Влажность почвы: ");
-  Serial.println(soilMoisture);
-  Serial.println(time.gettime("d-m, H:i:s"));
+  // Serial.print("Влажность почвы: ");
+  // Serial.println(soilMoisture);
+  // Serial.println(time.gettime("d-m-Y H:i:s"));
 
-  // Проверяем условия полива
-  // if (soilMoisture < dryThreshold) {
-  //   stopWatering();
-  // }  
+  writeToSD(0);
+  printToScreen();
+
   if (soilMoisture > moistureThreshold) {
     startWatering();
     printToScreen();
+    writeToSD(1);
     delay(5000);
     stopWatering();
 
   }
-
   // Задержка между измерениями
-  delay(1800000);
-  // delay(10000);
+  //delay(1800000);
+  delay(10000);
 }
 
+
+void soundUp(){
+  tone(piezoPin, 1000, 100);
+  delay(200);
+  tone(piezoPin, 2000, 100);
+  delay(200);  
+  tone(piezoPin, 3000, 100);
+  delay(200);  
+}
+void soundDown(){
+  tone(piezoPin, 3000, 100);
+  delay(200);
+  tone(piezoPin, 2000, 100);
+  delay(200);  
+  tone(piezoPin, 1000, 100);
+  delay(200);
+}
+void startWatering() {          // Функция для включения полива
+  digitalWrite(pumpPin, LOW);   // Включаем реле насоса
+  // Serial.println("Полив начат");
+  soundUp();
+}
+void stopWatering() {           // Функция для остановки полива
+  digitalWrite(pumpPin, HIGH);  // Выключаем реле насоса
+  // Serial.println("Полив остановлен");
+  soundDown();
+}
+void printToScreen(){
+  LCD.setCursor(0, 0);
+  LCD.print("Humidity:" + String(soilMoisture));
+  LCD.setCursor(0, 1);
+  LCD.print(time.gettime("d-m, H:i:s"));
+}
+void writeToSD(bool watering){
+  String logData = String(time.gettime("d-m-Y,H:i:s,")) + soilMoisture + "," + watering;
+  File dataFile = SD.open(datalog_filename, FILE_WRITE);
+    if (dataFile) {
+    dataFile.println(logData);
+    dataFile.close();
+    // Публикуем в мониторе порта для отладки
+    // Serial.println(logData);
+  }
+  else {
+    warning = true;
+    // Serial.println("error opening " + datalog_filename);
+  }
+}
