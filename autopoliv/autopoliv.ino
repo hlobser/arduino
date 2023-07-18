@@ -27,10 +27,9 @@ MISO - пин 12
 CLK - пин 13
 CS - пин 4
 */
-unsigned int soilMoisture;
+int soilMoisture;
 const int sdCardPin = 4;
 String datalog_filename = "datalog.csv";
-bool watering = 0;
 
 bool warning = false;     // флаг ошибки
 
@@ -55,15 +54,14 @@ void setup() {
   LCD.init();            // инициализация LCD дисплея
 // LCD.backlight();      // включение подсветки дисплея
 
-
-LCD.createChar(0, l_warning);
-LCD.createChar(1, r_warning);
+  LCD.createChar(0, l_warning);
+  LCD.createChar(1, r_warning);
 
   if (!SD.begin(sdCardPin)) { 
     warning = true;
     LCD.clear();                      // Пытаемся проинициализировать sd карту
     LCD.print("NO SD card");          // Если что-то пошло не так, выдаем на экран
-    return;
+    // return;
   }
   else {
   LCD.setCursor(0, 0);
@@ -83,8 +81,8 @@ LCD.createChar(1, r_warning);
       dataFile.close();
     }
   }
-  //delay(40000);
-  delay(4000);
+  delay(40000);
+  // delay(4000);
   //soundDown();
 }
 
@@ -99,7 +97,10 @@ void loop() {
       dataFile.close();
     }
   }
-  // if (!(200 <= soilMoisture >= 900)){
+  soilMoisture = analogRead(soilSensorPin);         // Считываем значение с датчика почвы
+
+  // if (!(soilMoisture <= 1000 or soilMoisture >= 200)){
+  //   warning = true;
   //   File dataFile = SD.open(datalog_filename, FILE_WRITE);
   //   if (dataFile) {
   //     dataFile.println("soil moisture sensor error");
@@ -112,11 +113,9 @@ void loop() {
     LCD.print("!");
     LCD.write(1);
   }
-  // Считываем значение с датчика почвы
-  soilMoisture = analogRead(soilSensorPin);
+  
 
-  // Выводим значение в монитор порта
-  // Serial.print("Влажность почвы: ");
+  // Serial.print("Влажность почвы: ");             // Выводим значение в монитор порта
   // Serial.println(soilMoisture);
   // Serial.println(time.gettime("d-m-Y H:i:s"));
 
@@ -132,8 +131,8 @@ void loop() {
 
   }
   // Задержка между измерениями
-  //delay(1800000);
-  delay(10000);
+  delay(1800000);
+  // delay(100000);
 }
 
 
